@@ -1,6 +1,6 @@
 
 const TEXTS = {
-    PROLOGUE = [
+    PROLOGUE : [
    
     "하늘은 오래전에 너를 잊었다.\n그러나 산과 돌은 아직도 네 이름을 알고 있다.\n\n오늘도 너는 이 산 아래에 서 있다.\n여기서부터 네 형벌이, 또 한 번 시작된다.",
 
@@ -711,6 +711,7 @@ function calculateFinal() {
 
 // Start Game
 renderStage();
+
 
 
 
