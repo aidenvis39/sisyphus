@@ -1,11 +1,43 @@
+// ==========================================
+// [1] FIREBASE 설정 부분 (여기를 꼭 채워주세요!)
+// ==========================================
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDS9heV0bykqCqcGDpC1lY_aSYPnuqWhiM",
+  authDomain: "sisyphus-f679d.firebaseapp.com",
+  projectId: "sisyphus-f679d",
+  storageBucket: "sisyphus-f679d.firebasestorage.app",
+  messagingSenderId: "44670464402",
+  appId: "1:44670464402:web:e43b9a2a94402ed241d14b",
+  measurementId: "G-LZ4JJ5QJV3"
+};
+
+// Firebase 초기화
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// 데이터를 저장하는 함수
+async function saveResultToFirebase(resultData) {
+    try {
+        await addDoc(collection(db, "sisyphus_results"), {
+            ...resultData,
+            timestamp: new Date() 
+        });
+        console.log("✅ 상세 선택 기록까지 저장 완료!");
+    } catch (e) {
+        console.error("❌ 데이터 저장 실패:", e);
+    }
+}
+// ==========================================
+
+
 const TEXTS = {
   PROLOGUE: [
     "하늘은 오래전에 너를 잊었다.\n그러나 산과 돌은 아직도 네 이름을 알고 있다.\n\n오늘도 너는 이 산 아래에 서 있다.\n여기서부터 네 형벌이, 또 한 번 시작된다.",
-
     "---\n\n한때 너는 에피라의 왕이었다.\n손님을 속이고, 신들의 비밀을 팔아 이득을 챙겼다.\n죽음마저 속여 쇠사슬에 묶어, 세상에서 아무도 죽지 못하게 만들었다.\n\n그래서 신들은 한 가지 형벌을 내렸다.\n\n영원한 반복.\n\n정상에 올리면 다시 굴러 떨어지는 돌,\n그리고 그 돌을 다시 밀어 올리는 너.",
-
     "---\n\n처음에는 분노뿐이었다.\n언젠가 또 한 번 속여 빠져나가리라 이를 갈며 산을 올랐다.\n그러나 발자국이 산허리에 굳어 갈수록,\n분노도, 저주도, 체념도 아닌 것이 마음속에 자라났다.\n\n만약 이것이 내 유일한 삶이라면,\n나는 이 삶을 어떻게 바라볼 것인가.",    
-
     "---\n\n오늘도 산기슭에 익숙한 무게의 돌이 너를 기다리고 있다.\n네 안에서 질문이 떠오른다.\n\"이 끝없는 오르막 속에서, 나에게 '삶'이란 무엇인가.\"\n\n돌은 네 손에 맡겨지고,\n산은 조용히 길을 내어 준다.\n발을 떼어라.\n오늘의 대답은, 오늘 올라가는 네 걸음 속에서 시작될 것이다."
   ],
 
@@ -301,25 +333,26 @@ const TEXTS = {
 };
 
 const IMAGES = {
-    PROLOGUE: "images/prolouge.png", // Note: user's filename has typo
+    PROLOGUE: "images/prolouge.png",
     Q1: "images/Q1.png",
     Q2: "images/Q2.png",
     Q3: "images/Q3.png",
     Q4: "images/Q4.png",
     Q5: "images/Q5.png",
     EXTRA: "images/extra_Q.png",
-    ENDING: "images/Q5.png" // User didn't specify ending image, reusing Q5 or maybe Q5.png is ending? User said "Q5" in list. Let's assume Q5.png for Q5 stage and Ending for now or just Q5.
+    ENDING: "images/Q5.png"
 };
 
+// [수정] 사용자의 선택 기록을 담을 배열(history) 추가
 let state = {
     M: 0,
     R: 0,
     P: 0,
     flags: new Set(),
     stage: 'PROLOGUE',
-    prologueIndex: 0
+    prologueIndex: 0,
+    history: [] // 여기에 사용자의 선택이 하나씩 쌓입니다.
 };
-
 
 // ----------------- LOGIC FUNCTIONS -----------------
 
@@ -540,9 +573,24 @@ function renderStage() {
     }
 }
 
-function handleChoice(choiceId) {
+// ⚠️ 비동기 처리를 위해 async 추가
+async function handleChoice(choiceId) {
     const s = state;
     const f = s.flags;
+
+    // [수정] 현재 질문에 대한 사용자 선택 기록하기
+    const currentData = TEXTS[s.stage];
+    if (currentData && currentData.choices) {
+        const selectedOption = currentData.choices.find(c => c.id === choiceId);
+        if (selectedOption) {
+            s.history.push({
+                stage: s.stage,
+                choiceId: choiceId,
+                choiceText: selectedOption.text
+            });
+        }
+    }
+
 
     if (s.stage === 'Q1') {
         if (choiceId === 'a') { s.M -= 1; s.R -= 2; s.P -= 1; f.add("q1_world_blame"); }
@@ -642,6 +690,20 @@ function handleChoice(choiceId) {
         const typeKey = `${s.typeId}${stance}`;
         s.endingText = TEXTS.ENDINGS[typeKey] || "엔딩을 찾을 수 없습니다.";
         s.endingTypeKey = typeKey;
+
+        // [수정] history 배열까지 포함해서 전송
+        saveResultToFirebase({
+            typeId: s.typeId,     // 숫자 타입 (1~8)
+            endingKey: typeKey,   // 최종 키 (예: 1A, 3B)
+            family: s.family,     // 그룹 (예: AGENT_GROWTH)
+            scores: {             // M, R, P 점수
+                M: s.M,
+                R: s.R,
+                P: s.P
+            },
+            history: s.history    // 사용자의 모든 선택 기록
+        });
+
         s.stage = 'ENDING';
     }
 
@@ -718,9 +780,6 @@ function calculateFinal() {
 
 // Start Game
 renderStage();
-
-
-
 
 
 
